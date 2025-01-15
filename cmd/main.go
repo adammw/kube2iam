@@ -20,6 +20,7 @@ func addFlags(s *server.Server, fs *pflag.FlagSet) {
 	fs.StringVar(&s.MetricsPort, "metrics-port", s.MetricsPort, "Metrics server http port (default: same as kube2iam server port)")
 	fs.StringVar(&s.BaseRoleARN, "base-role-arn", s.BaseRoleARN, "Base role ARN")
 	fs.BoolVar(&s.Debug, "debug", s.Debug, "Enable debug features")
+	fs.BoolVar(&s.LogIMDSv1, "log-imdsv1", s.Debug, "Log IMDSv1 requests (requests without X-aws-ec2-metadata-token)")
 	fs.StringVar(&s.DefaultIAMRole, "default-role", s.DefaultIAMRole, "Fallback role to use when annotation is not set")
 	fs.StringVar(&s.IAMRoleKey, "iam-role-key", s.IAMRoleKey, "Pod annotation key used to retrieve the IAM role")
 	fs.StringVar(&s.IAMExternalID, "iam-external-id", s.IAMExternalID, "Pod annotation key used to retrieve the IAM ExternalId")

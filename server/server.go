@@ -74,6 +74,7 @@ type Server struct {
 	AutoDiscoverBaseArn        bool
 	AutoDiscoverDefaultRole    bool
 	Debug                      bool
+	LogIMDSv1                  bool
 	Insecure                   bool
 	NamespaceRestriction       bool
 	Verbose                    bool
@@ -168,6 +169,11 @@ func parseRemoteAddr(addr string) string {
 		return ""
 	}
 	return hostname
+}
+
+func isIMDSv2(r *http.Request) bool {
+	token := r.Header.Get("X-aws-ec2-metadata-token")
+	return (r.Method == http.MethodPut && tokenRouteRegexp.MatchString(r.URL.Path)) || (r.Method == http.MethodGet && token != "")
 }
 
 func (s *Server) getRoleMapping(IP string) (*mappings.RoleMappingResult, error) {
@@ -286,6 +292,8 @@ func (s *Server) debugStoreHandler(logger *log.Entry, w http.ResponseWriter, r *
 }
 
 func (s *Server) securityCredentialsHandler(logger *log.Entry, w http.ResponseWriter, r *http.Request) {
+	s.logIMDSv1(logger, r)
+
 	w.Header().Set("Server", "EC2ws")
 	remoteIP := parseRemoteAddr(r.RemoteAddr)
 	roleMapping, err := s.getRoleMapping(remoteIP)
@@ -304,6 +312,8 @@ func (s *Server) securityCredentialsHandler(logger *log.Entry, w http.ResponseWr
 }
 
 func (s *Server) roleHandler(logger *log.Entry, w http.ResponseWriter, r *http.Request) {
+	s.logIMDSv1(logger, r)
+
 	w.Header().Set("Server", "EC2ws")
 	remoteIP := parseRemoteAddr(r.RemoteAddr)
 
@@ -348,11 +358,26 @@ func (s *Server) roleHandler(logger *log.Entry, w http.ResponseWriter, r *http.R
 	}
 }
 
+func (s *Server) logIMDSv1(logger *log.Entry, r *http.Request) {
+	if s.LogIMDSv1 && !isIMDSv2(r) {
+		remoteIP := parseRemoteAddr(r.RemoteAddr)
+		if pod, err := s.roleMapper.GetPodMetadata(remoteIP); err == nil {
+			logger = logger.WithFields(log.Fields{
+				"pod.name":      pod.Name,
+				"pod.namespace": pod.Namespace,
+				"pod.labels":    pod.Labels,
+			})
+		}
+		logger.Info("IMDSv1 request")
+	}
+}
+
 func (s *Server) reverseProxyHandler(logger *log.Entry, w http.ResponseWriter, r *http.Request) {
+	s.logIMDSv1(logger, r)
+
 	// Remove remoteaddr to prevent issues with new IMDSv2 to fail when x-forwarded-for header is present
 	// for more details please see: https://github.com/aws/aws-sdk-ruby/issues/2177 https://github.com/uswitch/kiam/issues/359
-	token := r.Header.Get("X-aws-ec2-metadata-token")
-	if (r.Method == http.MethodPut && tokenRouteRegexp.MatchString(r.URL.Path)) || (r.Method == http.MethodGet && token != "") {
+	if isIMDSv2(r) {
 		r.RemoteAddr = ""
 	}
 

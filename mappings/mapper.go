@@ -7,7 +7,8 @@ import (
 
 	glob "github.com/ryanuber/go-glob"
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/jtblin/kube2iam"
 	"github.com/jtblin/kube2iam/iam"
@@ -27,9 +28,9 @@ type RoleMapper struct {
 
 type store interface {
 	ListPodIPs() []string
-	PodByIP(string) (*v1.Pod, error)
+	PodByIP(string) (*corev1.Pod, error)
 	ListNamespaces() []string
-	NamespaceByName(string) (*v1.Namespace, error)
+	NamespaceByName(string) (*corev1.Namespace, error)
 }
 
 // RoleMappingResult represents the relevant information for a given mapping request
@@ -37,6 +38,12 @@ type RoleMappingResult struct {
 	Role      string
 	IP        string
 	Namespace string
+}
+
+// GetPodMetadata returns the metadata of a pod based on IP address
+func (r *RoleMapper) GetPodMetadata(IP string) (*metav1.ObjectMeta, error) {
+	pod, err := r.store.PodByIP(IP)
+	return &(pod.ObjectMeta), err
 }
 
 // GetRoleMapping returns the normalized iam RoleMappingResult based on IP address
@@ -76,7 +83,7 @@ func (r *RoleMapper) GetExternalIDMapping(IP string) (string, error) {
 // extractQualifiedRoleName extracts a fully qualified ARN for a given pod,
 // taking into consideration the appropriate fallback logic and defaulting
 // logic along with the namespace role restrictions
-func (r *RoleMapper) extractRoleARN(pod *v1.Pod) (string, error) {
+func (r *RoleMapper) extractRoleARN(pod *corev1.Pod) (string, error) {
 	rawRoleName, annotationPresent := pod.GetAnnotations()[r.iamRoleKey]
 
 	if !annotationPresent && r.defaultRoleARN == "" {
