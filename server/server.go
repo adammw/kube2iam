@@ -79,6 +79,7 @@ type Server struct {
 	NamespaceRestriction       bool
 	Verbose                    bool
 	Version                    bool
+	loggedPods                 map[string]bool
 	iam                        *iam.Client
 	k8s                        *k8s.Client
 	roleMapper                 *mappings.RoleMapper
@@ -361,6 +362,10 @@ func (s *Server) roleHandler(logger *log.Entry, w http.ResponseWriter, r *http.R
 func (s *Server) logIMDSv1(logger *log.Entry, r *http.Request) {
 	if s.LogIMDSv1 && !isIMDSv2(r) {
 		remoteIP := parseRemoteAddr(r.RemoteAddr)
+		if _, ok := s.loggedPods[remoteIP]; ok {
+			return // skip if already logged
+		}
+
 		if pod, err := s.roleMapper.GetPodMetadata(remoteIP); err == nil {
 			logger = logger.WithFields(log.Fields{
 				"pod.name":      pod.Name,
@@ -368,7 +373,8 @@ func (s *Server) logIMDSv1(logger *log.Entry, r *http.Request) {
 				"pod.labels":    pod.Labels,
 			})
 		}
-		logger.Info("IMDSv1 request")
+		logger.Info("IMDSv1 request - no subsequent calls from this pod will be logged")
+		s.loggedPods[remoteIP] = true
 	}
 }
 
@@ -403,7 +409,7 @@ func (s *Server) Run(host, token, nodeName string, insecure bool) error {
 	log.Debugln("Caches have been synced.  Proceeding with server.")
 	s.roleMapper = mappings.NewRoleMapper(s.IAMRoleKey, s.IAMExternalID, s.DefaultIAMRole, s.NamespaceRestriction, s.NamespaceKey, s.iam, s.k8s, s.NamespaceRestrictionFormat)
 	log.Debugf("Starting pod and namespace sync jobs with %s resync period", s.CacheResyncPeriod.String())
-	podSynched := s.k8s.WatchForPods(kube2iam.NewPodHandler(s.IAMRoleKey), s.CacheResyncPeriod)
+	podSynched := s.k8s.WatchForPods(kube2iam.NewPodHandler(s.IAMRoleKey, s.loggedPods), s.CacheResyncPeriod)
 	namespaceSynched := s.k8s.WatchForNamespaces(kube2iam.NewNamespaceHandler(s.NamespaceKey), s.CacheResyncPeriod)
 
 	synced := false
@@ -468,5 +474,6 @@ func NewServer() *Server {
 		NamespaceRestrictionFormat: defaultNamespaceRestrictionFormat,
 		HealthcheckFailReason:      "Healthcheck not yet performed",
 		IAMRoleSessionTTL:          defaultIAMRoleSessionTTL,
+		loggedPods:                 make(map[string]bool),
 	}
 }

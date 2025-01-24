@@ -11,6 +11,7 @@ import (
 // PodHandler represents a pod handler.
 type PodHandler struct {
 	iamRoleKey string
+	loggedPods map[string]bool
 }
 
 func (p *PodHandler) podFields(pod *v1.Pod) log.Fields {
@@ -68,6 +69,10 @@ func (p *PodHandler) OnDelete(obj interface{}) {
 
 	logger := log.WithFields(p.podFields(pod))
 	logger.Debug("Pod OnDelete")
+
+	if p.loggedPods != nil && pod.Status.PodIP != "" {
+		delete(p.loggedPods, pod.Status.PodIP)
+	}
 }
 
 func isPodActive(p *v1.Pod) bool {
@@ -89,6 +94,6 @@ func PodIPIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // NewPodHandler constructs a pod handler given the relevant IAM Role Key
-func NewPodHandler(iamRoleKey string) *PodHandler {
-	return &PodHandler{iamRoleKey: iamRoleKey}
+func NewPodHandler(iamRoleKey string, loggedPods map[string]bool) *PodHandler {
+	return &PodHandler{iamRoleKey: iamRoleKey, loggedPods: loggedPods}
 }
