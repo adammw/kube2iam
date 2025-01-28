@@ -115,9 +115,10 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 // and recovers from panics.
 func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger := log.WithFields(log.Fields{
-		"req.method": r.Method,
-		"req.path":   r.URL.Path,
-		"req.remote": parseRemoteAddr(r.RemoteAddr),
+		"req.method":    r.Method,
+		"req.path":      r.URL.Path,
+		"req.remote":    parseRemoteAddr(r.RemoteAddr),
+		"req.userAgent": r.UserAgent(),
 	})
 	rw := newResponseWriter(w)
 
